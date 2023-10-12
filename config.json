@@ -2,6 +2,9 @@
     "local_dir": "",
     "ydnote_dir": "",
     "smms_secret_token": "",
+    "github_token": "",
+    "github_user": "",
+    "github_email": "",
     "is_relative_path": true
 }
 

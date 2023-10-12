@@ -35,6 +35,9 @@ class YoudaoNotePull(object):
         self.root_local_dir = None  # 本地文件根目录
         self.youdaonote_api = None
         self.smms_secret_token = None
+        self.github_user = None
+        self.github_email = None
+        self.github_token = None
         self.is_relative_path = None  # 是否使用相对路径
 
     def get_ydnote_dir_id(self):
@@ -54,6 +57,9 @@ class YoudaoNotePull(object):
         if error_msg:
             return '', error_msg
         self.smms_secret_token = config_dict['smms_secret_token']
+        self.github_token = config_dict['github_token']
+        self.github_user = config_dict['github_user']
+        self.github_email = config_dict['github_email']
         self.is_relative_path = config_dict['is_relative_path']
         return self._get_ydnote_dir_id(ydnote_dir=config_dict['ydnote_dir'])
 
@@ -253,7 +259,7 @@ class YoudaoNotePull(object):
         # 迁移附件和图片
         
         if  os.path.exists(new_file_path):
-            pull_image = PullImages(self.youdaonote_api,self.smms_secret_token,self.is_relative_path)
+            pull_image = PullImages(self.youdaonote_api,self.smms_secret_token,self.github_token,self.github_user,self.github_email,self.is_relative_path)
             pull_image.migration_ydnote_url(new_file_path)
         
     def _get_file_action(self, local_file_path, modify_time) -> Enum:

@@ -24,7 +24,7 @@ def covert_config(config_path=None) -> Tuple[dict, str]:
         except:
             return {}, '请检查「config.json」格式是否为 utf-8 格式的 json！建议使用 Sublime 编辑「config.json」'
 
-        key_list = ['local_dir', 'ydnote_dir', 'smms_secret_token', 'is_relative_path']
+        key_list = ['local_dir', 'ydnote_dir', 'smms_secret_token', 'github_token', 'github_user', 'github_email', 'is_relative_path']
         if key_list != list(config_dict.keys()):
-            return {}, '请检查「config.json」的 key 是否分别为 local_dir, ydnote_dir, smms_secret_token, is_relative_path'
+            return {}, '请检查「config.json」的 key 是否分别为 local_dir, ydnote_dir, smms_secret_token, github, is_relative_path'
         return config_dict, ''

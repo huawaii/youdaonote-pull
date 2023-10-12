@@ -1,10 +1,14 @@
 import re
 import os
 import glob
+import json
+import base64
+import logging
 from typing import Tuple
 import requests
 from urllib import parse
 
+from hashlib import sha1
 from urllib.parse import urlparse
 from youDaoNoteApi import YoudaoNoteApi
 from public import covert_config
@@ -22,11 +26,14 @@ CONFIG_PATH = 'config.json'
 
 
 class PullImages():
-    def __init__(self, youdaonote_api=None, smms_secret_token: str=None, is_relative_path: bool=None):
+    def __init__(self, youdaonote_api=None, smms_secret_token: str=None, github_token: str=None, github_user: str=None, github_email: str=None, is_relative_path: bool=None):
         self.youdaonote_api = youdaonote_api
         self.smms_secret_token = smms_secret_token
+        self.github_token = github_token
+        self.github_user = github_user
+        self.github_email = github_email
         self.is_relative_path = is_relative_path  # 是否使用相对路径
-        if not self.smms_secret_token and not self.is_relative_path:
+        if not self.smms_secret_token and not self.github_token and not self.is_relative_path:
             self.load_config()
         if not self.youdaonote_api:
             self.login()
@@ -82,13 +89,18 @@ class PullImages():
         :return: new_image_path
         """
         # 当 smms_secret_token 为空（不上传到 SM.MS），下载到图片到本地
-        if not self.smms_secret_token:
+        if not self.smms_secret_token and not self.github_token:
             image_path = self._download_image_url(file_path, image_url,index)
             return image_path or image_url
 
         # smms_secret_token 不为空，上传到 SM.MS
-        new_file_url, error_msg = ImageUpload.upload_to_smms(youdaonote_api=self.youdaonote_api, image_url=image_url,
+        if (self.github_token == ''):
+            new_file_url, error_msg = ImageUpload.upload_to_smms(youdaonote_api=self.youdaonote_api, image_url=image_url,
                                                              smms_secret_token=self.smms_secret_token)
+        else:
+            new_file_url, error_msg = ImageUpload.upload_to_github(youdaonote_api=self.youdaonote_api, image_url=image_url,
+                                                             github_token=self.github_token, github_user=self.github_user, github_email=self.github_email)
+
         # 如果上传失败，仍下载到本地
         if not error_msg:
             return new_file_url
@@ -226,6 +238,9 @@ class PullImages():
     def load_config(self):
         config_dict, error_msg = covert_config(CONFIG_PATH)
         self.smms_secret_token = config_dict['smms_secret_token']
+        self.github_token = config_dict['github_token']
+        self.github_user = config_dict['github_user']
+        self.github_email = config_dict['github_email']
         self.is_relative_path = config_dict['is_relative_path']
     
     def more_pull_images(self,md_dir: str):
@@ -297,6 +312,60 @@ class ImageUpload(object):
             image_url, smms_secret_token)
         return '', error_msg
 
+    def upload_to_github(youdaonote_api, image_url, github_token, github_user, github_email) -> str:
+        try:
+            file_content = youdaonote_api.http_get(image_url).content
+        except:
+            error_msg = '下载「{}」失败！图片可能已失效，可浏览器登录有道云笔记后，查看图片是否能正常加载'.format(image_url)
+            return '', error_msg
+
+        strlist = image_url.split("/")
+        file_name = str(strlist[len(strlist) - 1]) + '.png'
+
+        upload_api_url = 'https://api.github.com/repos/huawaii/MarkdownPhotos/contents/Youdao/' + file_name
+        header = {'Accept': 'application/vnd.github.v3+json',
+                  'Authorization': 'token ' + str(github_token),
+                  'Content-Type': 'application/json'
+                }
+        file_byte = base64.b64encode(file_content)
+        file_base64_content = str(file_byte).encode('ascii')
+        file_base64_content = b'blob %d\0' % len(file_base64_content) + file_base64_content
+        sha1_obj = sha1()
+        sha1_obj.update(file_base64_content)
+        sha1_obj = sha1_obj.hexdigest()
+        put_data = json.dumps({'message': 'add ' + str(file_name),
+                    'content': str(file_byte, encoding='utf-8'),
+                    'sha': str(sha1_obj),
+                    'committer': {
+                        'name': str(github_user),
+                        'email': str(github_email)
+                        }
+                    }
+                    )
+
+        try:
+            res = requests.put(upload_api_url, data=put_data, headers=header)
+            res_json = json.loads(res.text)
+        except requests.exceptions.ProxyError as err:
+            error_msg = '网络错误，上传「{}」到 Github 失败！将下载图片到本地。错误提示1：{}'.format(image_url, format(err))
+            return '', error_msg
+        except Exception as err:
+            error_msg = '网络错误，上传「{}」到 Github 失败！将下载图片到本地。错误提示2：{}'.format(image_url, format(err))
+            return '', error_msg
+
+        if ('content' in res_json):
+            content_dict = res_json['content']
+            if ('html_url' in content_dict):
+                url = content_dict['html_url']
+                return url, ''
+            else:
+                print('没有 html_url，转换失败')
+        else:
+            print('没有 content，转换失败')
+
+        error_msg = '上传「{}」到 Github 失败，请检查图片 url 或 github_token {}）是否正确！将下载图片到本地'.format(
+            image_url, github_token)
+        return '', error_msg
 
 if __name__ == '__main__':
     path = "D:\\obsidian\\obsidian\\其他"
