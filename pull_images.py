@@ -355,9 +355,10 @@ class ImageUpload(object):
 
         if ('content' in res_json):
             content_dict = res_json['content']
-            if ('html_url' in content_dict):
-                url = content_dict['html_url']
-                return url, ''
+            if ('download_url' in content_dict):
+                download_url = content_dict['download_url']
+                print('上传 Github 成功，' + download_url)
+                return download_url, ''
             else:
                 print('没有 html_url，转换失败')
         else:
